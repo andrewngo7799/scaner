@@ -1,0 +1,111 @@
+index.html
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto Portfolio Scanner</title>
+  <!-- Thư viện Ethers.js để kết nối ví -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    button { background: #0052ff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+    button:hover { background: #0040cc; }
+    .token-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+    .loading { color: #888; font-style: italic; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Ví & Tài sản của bạn</h2>
+  <button id="connectBtn" onclick="connectAndScan()">Kết nối Ví & Quét Tài Sản</button>
+
+  <div id="walletInfo" style="margin-top: 15px;"></div>
+  <div id="loading" class="loading" style="display: none;">Đang quét tài sản trên các chuỗi...</div>
+  
+  <div id="assetsList" style="margin-top: 15px;"></div>
+</div>
+
+<script>
+  // Đã dán API Key Covalent / GoldRush của bạn vào đây:
+  const COVALENT_API_KEY = "Cqt_rQmT••••••••••••••••••••••••xHwP"; 
+
+  async function connectAndScan() {
+    const walletInfo = document.getElementById("walletInfo");
+    const loading = document.getElementById("loading");
+    const assetsList = document.getElementById("assetsList");
+
+    // 1. Kiểm tra ví Web3 (MetaMask, Bitget Wallet,...)
+    if (window.ethereum) {
+      try {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        // Yêu cầu kết nối ví
+        await provider.send("eth_requestAccounts", []);
+        const signer = provider.getSigner();
+        const userAddress = await signer.getAddress();
+
+        walletInfo.innerHTML = `<b>Địa chỉ ví:</b> ${userAddress.substring(0,6)}...${userAddress.substring(userAddress.length - 4)}`;
+        loading.style.display = "block";
+        assetsList.innerHTML = "";
+
+        // 2. Tự động gọi API GoldRush/Covalent để lấy toàn bộ tài sản
+        await fetchUserAssets(userAddress);
+
+      } catch (error) {
+        console.error(error);
+        alert("Lỗi kết nối ví!");
+      } finally {
+        loading.style.display = "none";
+      }
+    } else {
+      alert("Vui lòng mở trang web này bằng trình duyệt trong ứng dụng ví (Bitget Wallet/MetaMask)!");
+    }
+  }
+
+  async function fetchUserAssets(address) {
+    const assetsList = document.getElementById("assetsList");
+    // Sử dụng endpoint allchains của Covalent
+    const url = `https://api.covalenthq.com/v1/allchains/address/${address}/balances_v2/?key=${COVALENT_API_KEY}`;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data && data.data && data.data.items) {
+        let html = "<h3>Tài sản tìm thấy:</h3>";
+        let hasTokens = false;
+
+        data.data.items.forEach(item => {
+          // Bỏ qua các token có số dư bằng 0
+          if (item.balance && item.balance !== "0") {
+            hasTokens = true;
+            const decimals = item.contract_decimals || 18;
+            const formattedBalance = (parseInt(item.balance) / Math.pow(10, decimals)).toFixed(4);
+            const symbol = item.contract_ticker_symbol || "Token";
+
+            html += `
+              <div class="token-item">
+                <span><b>${symbol}</b> (${item.chain_name || 'Mạng'})</span>
+                <span>${formattedBalance}</span>
+              </div>
+            `;
+          }
+        });
+
+        if (!hasTokens) {
+          html += "<p>Không tìm thấy token nào có số dư lớn hơn 0.</p>";
+        }
+
+        assetsList.innerHTML = html;
+      }
+    } catch (err) {
+      console.error(err);
+      assetsList.innerHTML = "<p>Lỗi khi tải dữ liệu tài sản từ API.</p>";
+    }
+  }
+</script>
+
+</body>
+</html>
